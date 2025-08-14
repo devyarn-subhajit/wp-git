@@ -34,6 +34,11 @@ if ($remoteVersion === false) {
 }
 $remoteVersion = trim($remoteVersion);
 
+// Ensure remote version format is valid
+if (!preg_match('/^\d+(\.\d+)*$/', $remoteVersion)) {
+    exit("❌ Invalid remote version format in version.txt\n");
+}
+
 echo "📄 Local version: $localVersion\n";
 echo "📄 Remote version: $remoteVersion\n";
 
@@ -41,8 +46,8 @@ if (version_compare($localVersion, $remoteVersion, '>=')) {
     exit("✅ Already up to date.\n");
 }
 
-// === Continue with update if remote version is newer ===
-// (The rest is same as previous script — download zip, extract, copy, cleanup)
+// === Continue with update ===
+echo "⬇ Downloading update...\n";
 
 // TEMP PATHS
 $tmpZip = __DIR__ . '/update.zip';
@@ -67,6 +72,13 @@ if ($zip->open($tmpZip) === TRUE) {
 // Find extracted root folder
 $rootExtractedFolder = glob($tmpDir . '/*', GLOB_ONLYDIR)[0];
 
+// Ensure version.txt exists in the update
+if (!file_exists($rootExtractedFolder . '/version.txt')) {
+    rrmdir($tmpDir);
+    unlink($tmpZip);
+    exit("❌ Update aborted — version.txt missing from repository!\n");
+}
+
 // Sync files
 sync_directories($rootExtractedFolder, __DIR__, $skipList);
 
@@ -76,7 +88,7 @@ unlink($tmpZip);
 
 echo "✅ Update complete to version $remoteVersion!\n";
 
-// Helper functions (same as before)
+// Helper functions
 function sync_directories($src, $dst, $skipList = []) {
     $skipPaths = array_map(function($item) use ($dst) {
         return realpath($dst . '/' . $item);
@@ -84,6 +96,8 @@ function sync_directories($src, $dst, $skipList = []) {
 
     $dir = opendir($src);
     @mkdir($dst);
+
+    // Copy/update files
     while(false !== ($file = readdir($dir))) {
         if ($file != '.' && $file != '..') {
             $srcPath = "$src/$file";
@@ -102,8 +116,10 @@ function sync_directories($src, $dst, $skipList = []) {
     }
     closedir($dir);
 
+    // Remove files not in source (but don't delete version.txt)
     $dstFiles = array_diff(scandir($dst), ['.', '..']);
     foreach ($dstFiles as $file) {
+        if ($file === 'version.txt') continue; // never delete version.txt
         $srcPath = "$src/$file";
         $dstPath = "$dst/$file";
         if (!file_exists($srcPath) && !should_skip($dstPath, $skipPaths)) {
