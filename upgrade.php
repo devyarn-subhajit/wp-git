@@ -7,10 +7,8 @@ $branch       = 'main';
 
 // Files/folders to skip
 $skipList = [
-    'upgrade.php',
     '.env',
     'db',
-    'uploads'
 ];
 
 // === 0. Check version ===
