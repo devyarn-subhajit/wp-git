@@ -88,54 +88,49 @@ echo "✅ Update complete to version $remoteVersion!\n";
 
 // Helper functions
 function sync_directories($src, $dst, $skipList = []) {
-    $skipPaths = array_map(function($item) use ($dst) {
-        return realpath($dst . '/' . $item);
-    }, $skipList);
-
     $dir = opendir($src);
-    @mkdir($dst);
+    @mkdir($dst, 0777, true);
 
-    // Copy/update files
-    while(false !== ($file = readdir($dir))) {
-        if ($file != '.' && $file != '..') {
-            $srcPath = "$src/$file";
-            $dstPath = "$dst/$file";
+    // Loop through source files
+    while (false !== ($file = readdir($dir))) {
+        if ($file == '.' || $file == '..') continue;
 
-            // Always allow upgrade.php to be updated if present in repo
-            if ($file !== 'upgrade.php' && should_skip($dstPath, $skipPaths)) {
-                continue;
-            }
+        $srcPath = "$src/$file";
+        $dstPath = "$dst/$file";
 
-            if (is_dir($srcPath)) {
-                sync_directories($srcPath, $dstPath, $skipList);
-            } else {
-                copy($srcPath, $dstPath);
-            }
+        // Skip paths in skipList (except upgrade.php)
+        if ($file !== 'upgrade.php' && is_in_skiplist($dstPath, $skipList)) {
+            continue;
+        }
+
+        if (is_dir($srcPath)) {
+            sync_directories($srcPath, $dstPath, $skipList);
+        } else {
+            copy($srcPath, $dstPath);
         }
     }
     closedir($dir);
 
-    // Remove files not in source (but don't delete version.txt or upgrade.php)
-    $dstFiles = array_diff(scandir($dst), ['.', '..']);
-    foreach ($dstFiles as $file) {
-        if (in_array($file, ['version.txt', 'upgrade.php'])) continue; // never delete
+    // Remove files/folders that are not in source (but keep version.txt and upgrade.php)
+    foreach (array_diff(scandir($dst), ['.', '..']) as $file) {
+        if (in_array($file, ['version.txt', 'upgrade.php'])) continue;
         $srcPath = "$src/$file";
         $dstPath = "$dst/$file";
-        if (!file_exists($srcPath) && !should_skip($dstPath, $skipPaths)) {
+        if (!file_exists($srcPath) && !is_in_skiplist($dstPath, $skipList)) {
             is_dir($dstPath) ? rrmdir($dstPath) : unlink($dstPath);
         }
     }
 }
 
-function should_skip($path, $skipPaths) {
-    $realPath = realpath($path);
-    foreach ($skipPaths as $skip) {
-        if ($skip && strpos($realPath, $skip) === 0) {
+function is_in_skiplist($path, $skipList) {
+    foreach ($skipList as $skip) {
+        if (strpos($path, DIRECTORY_SEPARATOR . $skip) !== false) {
             return true;
         }
     }
     return false;
 }
+
 
 function rrmdir($dir) {
     if (!is_dir($dir)) return;
