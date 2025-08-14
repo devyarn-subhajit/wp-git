@@ -3,9 +3,9 @@
 $githubUser   = 'devyarn-subhajit';
 $repoName     = 'wp-git';
 $branch       = 'main';
-// $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx';
+// $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx'; // For private repos
 
-// Files/folders to skip
+// Files/folders to skip (won't be replaced or deleted)
 $skipList = [
     '.env',
     'db',
@@ -101,7 +101,8 @@ function sync_directories($src, $dst, $skipList = []) {
             $srcPath = "$src/$file";
             $dstPath = "$dst/$file";
 
-            if (should_skip($dstPath, $skipPaths)) {
+            // Always allow upgrade.php to be updated if present in repo
+            if ($file !== 'upgrade.php' && should_skip($dstPath, $skipPaths)) {
                 continue;
             }
 
@@ -114,10 +115,10 @@ function sync_directories($src, $dst, $skipList = []) {
     }
     closedir($dir);
 
-    // Remove files not in source (but don't delete version.txt)
+    // Remove files not in source (but don't delete version.txt or upgrade.php)
     $dstFiles = array_diff(scandir($dst), ['.', '..']);
     foreach ($dstFiles as $file) {
-        if ($file === 'version.txt') continue; // never delete version.txt
+        if (in_array($file, ['version.txt', 'upgrade.php'])) continue; // never delete
         $srcPath = "$src/$file";
         $dstPath = "$dst/$file";
         if (!file_exists($srcPath) && !should_skip($dstPath, $skipPaths)) {
