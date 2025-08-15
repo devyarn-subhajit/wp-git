@@ -3,12 +3,13 @@
 $githubUser   = 'devyarn-subhajit';
 $repoName     = 'wp-git';
 $branch       = 'main';
-// $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx'; // For private repos
+// $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx'; // for private repos
 
 // Files/folders to skip (preserve these)
 $skipList = [
     '.env',
     'db',
+    'upgrade.php'
 ];
 
 echo "⬇ Downloading update from GitHub...\n";
@@ -21,15 +22,14 @@ $tmpDir = __DIR__ . '/tmp_update';
 $zipUrl = "https://api.github.com/repos/$githubUser/$repoName/zipball/$branch";
 $opts = [
     "http" => [
-        "header" => [
-            "User-Agent: PHP",
-            // "Authorization: token $githubToken"
-        ]
+        "header" => "User-Agent: PHP\r\n"
+        // For private repos: "Authorization: token $githubToken\r\n"
     ]
 ];
 $context = stream_context_create($opts);
 
-if (!file_put_contents($tmpZip, file_get_contents($zipUrl, false, $context))) {
+$data = @file_get_contents($zipUrl, false, $context);
+if (!$data || !file_put_contents($tmpZip, $data)) {
     exit("❌ Failed to download update ZIP.\n");
 }
 
@@ -44,12 +44,15 @@ if ($zip->open($tmpZip) === TRUE) {
 }
 
 // Find extracted root folder
-$rootExtractedFolder = glob($tmpDir . '/*', GLOB_ONLYDIR)[0];
+$extractedFolders = glob($tmpDir . '/*', GLOB_ONLYDIR);
+if (!$extractedFolders || !isset($extractedFolders[0])) {
+    rrmdir($tmpDir);
+    unlink($tmpZip);
+    exit("❌ No folder found in extracted ZIP.\n");
+}
+$rootExtractedFolder = $extractedFolders[0];
 
-// 1️⃣ DELETE ALL EXCEPT SKIP LIST
-clean_directory(__DIR__, $skipList);
-
-// 2️⃣ COPY NEW FILES
+// 1️⃣ COPY NEW FILES SAFELY
 sync_directories($rootExtractedFolder, __DIR__, $skipList);
 
 // Cleanup
@@ -60,20 +63,16 @@ echo "✅ Update complete!\n";
 
 // === FUNCTIONS ===
 
-function clean_directory($dir, $skipList) {
-    foreach (array_diff(scandir($dir), ['.', '..']) as $item) {
-        $path = "$dir/$item";
-        if (in_array($item, $skipList)) continue; // skip preserved
-        is_dir($path) ? rrmdir($path) : unlink($path);
-    }
-}
-
 function sync_directories($src, $dst, $skipList = []) {
+    if (!is_dir($src)) return;
+    if (!is_dir($dst)) @mkdir($dst, 0777, true);
+
     $dir = opendir($src);
-    @mkdir($dst, 0777, true);
+    if (!$dir) return;
 
     while (false !== ($file = readdir($dir))) {
         if ($file == '.' || $file == '..') continue;
+
         $srcPath = "$src/$file";
         $dstPath = "$dst/$file";
 
@@ -85,6 +84,7 @@ function sync_directories($src, $dst, $skipList = []) {
             copy($srcPath, $dstPath);
         }
     }
+
     closedir($dir);
 }
 
@@ -92,7 +92,7 @@ function rrmdir($dir) {
     if (!is_dir($dir)) return;
     foreach (array_diff(scandir($dir), ['.', '..']) as $file) {
         $path = "$dir/$file";
-        is_dir($path) ? rrmdir($path) : unlink($path);
+        is_dir($path) ? rrmdir($path) : @unlink($path);
     }
     rmdir($dir);
 }
