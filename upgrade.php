@@ -1,16 +1,19 @@
 <?php
 // CONFIG
-$githubUser   = 'devyarn-subhajit';
-$repoName     = 'wp-git';
-$branch       = 'main';
-// $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx'; // for private repos
+$githubUser = 'devyarn-subhajit';
+$repoName   = 'wp-git';
+$branch     = 'main';
+// $githubToken = 'ghp_xxxxxxxxxxxxx'; // for private repos (if private repo)
 
 // Files/folders to skip (preserve these)
 $skipList = [
     '.env',
     'db',
-    'upgrade.php' // we will handle self-update separately
+    'upgrade.php'
 ];
+
+// Optional: backup .env and db/latest.sql before upgrade
+backup_critical_files($skipList);
 
 echo "⬇ Downloading update from GitHub...\n";
 
@@ -23,7 +26,7 @@ $zipUrl = "https://api.github.com/repos/$githubUser/$repoName/zipball/$branch";
 $opts = [
     "http" => [
         "header" => "User-Agent: PHP\r\n"
-        // For private repos: "Authorization: token $githubToken\r\n"
+        // "Authorization: token $githubToken\r\n"
     ]
 ];
 $context = stream_context_create($opts);
@@ -52,26 +55,14 @@ if (!$extractedFolders || !isset($extractedFolders[0])) {
 }
 $rootExtractedFolder = $extractedFolders[0];
 
-// 1️⃣ COPY NEW FILES SAFELY (skip .env, db, upgrade.php)
+// Copy new files safely
 sync_directories($rootExtractedFolder, __DIR__, $skipList);
-
-// 2️⃣ HANDLE upgrade.php SELF-UPDATE
-$newUpgradePath = "$rootExtractedFolder/upgrade.php";
-if (file_exists($newUpgradePath)) {
-    copy($newUpgradePath, __DIR__ . '/upgrade.php.new');
-    echo "⚡ upgrade.php updated to temporary file. Replace after script finishes.\n";
-}
 
 // Cleanup
 rrmdir($tmpDir);
 unlink($tmpZip);
 
 echo "✅ Update complete!\n";
-
-if (file_exists(__DIR__ . '/upgrade.php.new')) {
-    rename(__DIR__ . '/upgrade.php.new', __DIR__ . '/upgrade.php');
-    echo "⚡ upgrade.php successfully replaced.\n";
-}
 
 // === FUNCTIONS ===
 
@@ -109,4 +100,38 @@ function rrmdir($dir) {
     rmdir($dir);
 }
 
-echo "new update";
+function backup_critical_files($skipList) {
+    echo "💾 Backing up critical files...\n";
+    $backupDir = __DIR__ . '/backup_' . date('Ymd_His');
+    @mkdir($backupDir, 0777, true);
+
+    foreach ($skipList as $item) {
+        $src = __DIR__ . '/' . $item;
+        $dst = $backupDir . '/' . $item;
+
+        if (is_dir($src)) {
+            copy_dir($src, $dst);
+        } elseif (file_exists($src)) {
+            copy($src, $dst);
+        }
+    }
+
+    echo "💾 Backup completed: $backupDir\n";
+}
+
+function copy_dir($src, $dst) {
+    if (!is_dir($src)) return;
+    @mkdir($dst, 0777, true);
+
+    $files = array_diff(scandir($src), ['.', '..']);
+    foreach ($files as $file) {
+        $srcPath = "$src/$file";
+        $dstPath = "$dst/$file";
+
+        if (is_dir($srcPath)) {
+            copy_dir($srcPath, $dstPath);
+        } else {
+            copy($srcPath, $dstPath);
+        }
+    }
+}
