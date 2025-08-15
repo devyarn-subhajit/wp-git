@@ -70,4 +70,4 @@ if (count($backupFolders) > $max_backups) {
     }
 }
 
-echo "🎉 Backup process completed.\n";
+echo "🎉 Backup process completed hi.\n";
