@@ -10,17 +10,19 @@ $skipList = [
     '.env',
     'db',
     'upgrade.php',
-    'update.zip',
-    'tmp_update'
+    'tmp_update',
+    'update.zip'
 ];
 
-echo "⬇ Downloading update from GitHub...\n";
+echo "=== WP-GIT UPGRADE START ===\n";
+echo "GitHub Repo: $githubUser/$repoName ($branch)\n";
 
 // TEMP PATHS
 $tmpZip = __DIR__ . '/update.zip';
 $tmpDir = __DIR__ . '/tmp_update';
 
-// Download ZIP
+// Step 1: Download ZIP
+echo "\n[1/5] Downloading update from GitHub...\n";
 $zipUrl = "https://api.github.com/repos/$githubUser/$repoName/zipball/$branch";
 $opts = [
     "http" => [
@@ -34,18 +36,22 @@ $data = @file_get_contents($zipUrl, false, $context);
 if (!$data || !file_put_contents($tmpZip, $data)) {
     exit("❌ Failed to download update ZIP.\n");
 }
+echo "✅ ZIP downloaded.\n";
 
-// Extract ZIP
+// Step 2: Extract ZIP
+echo "\n[2/5] Extracting update ZIP...\n";
 $zip = new ZipArchive;
 if ($zip->open($tmpZip) === TRUE) {
     if (!is_dir($tmpDir)) mkdir($tmpDir);
     $zip->extractTo($tmpDir);
     $zip->close();
+    echo "✅ ZIP extracted.\n";
 } else {
     exit("❌ Failed to open ZIP file.\n");
 }
 
-// Find extracted root folder
+// Step 3: Find extracted root folder
+echo "\n[3/5] Locating extracted root folder...\n";
 $extractedFolders = glob($tmpDir . '/*', GLOB_ONLYDIR);
 if (!$extractedFolders || !isset($extractedFolders[0])) {
     rrmdir($tmpDir);
@@ -53,19 +59,37 @@ if (!$extractedFolders || !isset($extractedFolders[0])) {
     exit("❌ No folder found in extracted ZIP.\n");
 }
 $rootExtractedFolder = $extractedFolders[0];
+echo "✅ Found extracted folder.\n";
 
-// 1️⃣ COPY NEW FILES SAFELY
+// Step 4: Clean local directory except skip list
+echo "\n[4/5] Cleaning local directory...\n";
+clean_directory(__DIR__, $skipList);
+echo "✅ Clean complete.\n";
+
+// Step 5: Copy files from GitHub
+echo "\n[5/5] Copying new files from GitHub...\n";
 sync_directories($rootExtractedFolder, __DIR__, $skipList);
+echo "✅ Files copied.\n";
 
 // Cleanup
 rrmdir($tmpDir);
 unlink($tmpZip);
 
-echo "✅ Update complete!\n";
+echo "\n✅ Update complete!\n=== WP-GIT UPGRADE END ===\n";
 
 // === FUNCTIONS ===
 
-function sync_directories($src, $dst, $skipList = []) {
+function clean_directory($dir, $skipList)
+{
+    foreach (array_diff(scandir($dir), ['.', '..']) as $item) {
+        $path = "$dir/$item";
+        if (in_array($item, $skipList)) continue;
+        is_dir($path) ? rrmdir($path) : unlink($path);
+    }
+}
+
+function sync_directories($src, $dst, $skipList = [])
+{
     if (!is_dir($src)) return;
     if (!is_dir($dst)) @mkdir($dst, 0777, true);
 
@@ -90,7 +114,8 @@ function sync_directories($src, $dst, $skipList = []) {
     closedir($dir);
 }
 
-function rrmdir($dir) {
+function rrmdir($dir)
+{
     if (!is_dir($dir)) return;
     foreach (array_diff(scandir($dir), ['.', '..']) as $file) {
         $path = "$dir/$file";
