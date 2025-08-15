@@ -9,7 +9,9 @@ $branch       = 'main';
 $skipList = [
     '.env',
     'db',
-    'upgrade.php'
+    'upgrade.php',
+    'update.zip',
+    'tmp_update'
 ];
 
 echo "⬇ Downloading update from GitHub...\n";
