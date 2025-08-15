@@ -5,7 +5,7 @@ $repoName     = 'wp-git';
 $branch       = 'main';
 // $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx'; // For private repos
 
-// Files/folders to skip (won't be replaced or deleted)
+// Files/folders to skip
 $skipList = [
     '.env',
     'db',
@@ -27,24 +27,16 @@ $opts = [
 $context = stream_context_create($opts);
 
 $remoteVersion = @file_get_contents($remoteVersionUrl, false, $context);
-if ($remoteVersion === false) {
-    exit("❌ Failed to fetch remote version.\n");
-}
-$remoteVersion = trim($remoteVersion);
+if ($remoteVersion === false) exit("❌ Failed to fetch remote version.\n");
 
-// Ensure remote version format is valid
-if (!preg_match('/^\d+(\.\d+)*$/', $remoteVersion)) {
-    exit("❌ Invalid remote version format in version.txt\n");
-}
+$remoteVersion = trim($remoteVersion);
+if (!preg_match('/^\d+(\.\d+)*$/', $remoteVersion)) exit("❌ Invalid remote version format in version.txt\n");
 
 echo "📄 Local version: $localVersion\n";
 echo "📄 Remote version: $remoteVersion\n";
 
-if (version_compare($localVersion, $remoteVersion, '>=')) {
-    exit("✅ Already up to date.\n");
-}
+if (version_compare($localVersion, $remoteVersion, '>=')) exit("✅ Already up to date.\n");
 
-// === Continue with update ===
 echo "⬇ Downloading update...\n";
 
 // TEMP PATHS
@@ -70,14 +62,17 @@ if ($zip->open($tmpZip) === TRUE) {
 // Find extracted root folder
 $rootExtractedFolder = glob($tmpDir . '/*', GLOB_ONLYDIR)[0];
 
-// Ensure version.txt exists in the update
+// Ensure version.txt exists
 if (!file_exists($rootExtractedFolder . '/version.txt')) {
     rrmdir($tmpDir);
     unlink($tmpZip);
     exit("❌ Update aborted — version.txt missing from repository!\n");
 }
 
-// Sync files
+// 1️⃣ DELETE ALL EXCEPT SKIP LIST
+clean_directory(__DIR__, $skipList);
+
+// 2️⃣ COPY NEW FILES
 sync_directories($rootExtractedFolder, __DIR__, $skipList);
 
 // Cleanup
@@ -86,22 +81,26 @@ unlink($tmpZip);
 
 echo "✅ Update complete to version $remoteVersion!\n";
 
-// Helper functions
+// === FUNCTIONS ===
+
+function clean_directory($dir, $skipList) {
+    foreach (array_diff(scandir($dir), ['.', '..']) as $item) {
+        $path = "$dir/$item";
+        if (in_array($item, $skipList)) continue; // skip preserved
+        is_dir($path) ? rrmdir($path) : unlink($path);
+    }
+}
+
 function sync_directories($src, $dst, $skipList = []) {
     $dir = opendir($src);
     @mkdir($dst, 0777, true);
 
-    // Loop through source files
     while (false !== ($file = readdir($dir))) {
         if ($file == '.' || $file == '..') continue;
-
         $srcPath = "$src/$file";
         $dstPath = "$dst/$file";
 
-        // Skip paths in skipList (except upgrade.php)
-        if ($file !== 'upgrade.php' && is_in_skiplist($dstPath, $skipList)) {
-            continue;
-        }
+        if (in_array($file, $skipList)) continue;
 
         if (is_dir($srcPath)) {
             sync_directories($srcPath, $dstPath, $skipList);
@@ -110,32 +109,11 @@ function sync_directories($src, $dst, $skipList = []) {
         }
     }
     closedir($dir);
-
-    // Remove files/folders that are not in source (but keep version.txt and upgrade.php)
-    foreach (array_diff(scandir($dst), ['.', '..']) as $file) {
-        if (in_array($file, ['version.txt', 'upgrade.php'])) continue;
-        $srcPath = "$src/$file";
-        $dstPath = "$dst/$file";
-        if (!file_exists($srcPath) && !is_in_skiplist($dstPath, $skipList)) {
-            is_dir($dstPath) ? rrmdir($dstPath) : unlink($dstPath);
-        }
-    }
 }
-
-function is_in_skiplist($path, $skipList) {
-    foreach ($skipList as $skip) {
-        if (strpos($path, DIRECTORY_SEPARATOR . $skip) !== false) {
-            return true;
-        }
-    }
-    return false;
-}
-
 
 function rrmdir($dir) {
     if (!is_dir($dir)) return;
-    $files = array_diff(scandir($dir), ['.', '..']);
-    foreach ($files as $file) {
+    foreach (array_diff(scandir($dir), ['.', '..']) as $file) {
         $path = "$dir/$file";
         is_dir($path) ? rrmdir($path) : unlink($path);
     }
