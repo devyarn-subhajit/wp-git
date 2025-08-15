@@ -16,8 +16,7 @@ $db_port = $env['DB_PORT'] ?? 3306;
 
 $db_dir       = __DIR__ . '/db';
 $latest_path  = $db_dir . '/latest.sql';
-$backup_dir   = $db_dir . '/backup/' . $db_port . '-' . date('Y-m-d_H-i-s');
-$log_file     = $db_dir . '/backup_log.txt';
+$backup_dir   = $db_dir . '/backup/' . $db_port . '_' . date('y-m-d_H-i-s') . '_backup';
 $max_backups  = 3; // keep only latest 3 backups
 
 // ==== CREATE DIRECTORIES ====
@@ -27,13 +26,6 @@ foreach ([$db_dir, $db_dir . '/backup', $backup_dir] as $dir) {
             exit("❌ Failed to create directory: $dir\n");
         }
     }
-}
-
-// ==== LOG FUNCTION ====
-function logMessage($message, $log_file) {
-    $timestamp = date("[Y-m-d H:i:s]");
-    file_put_contents($log_file, "$timestamp $message\n", FILE_APPEND);
-    echo "$message\n";
 }
 
 // ==== EXPORT FUNCTION ====
@@ -47,21 +39,20 @@ function exportDatabase($host, $port, $user, $pass, $name, $outputPath) {
 }
 
 // ==== EXPORT LATEST ====
-logMessage("🟡 Exporting latest database snapshot: $latest_path", $log_file);
+echo "🟡 Exporting latest database snapshot: $latest_path\n";
 if (exportDatabase($db_host, $db_port, $db_user, $db_pass, $db_name, $latest_path)) {
-    logMessage("✅ Latest database export successful.", $log_file);
+    echo "✅ Latest database export successful.\n";
 } else {
-    logMessage("❌ Latest database export failed.", $log_file);
-    exit;
+    exit("❌ Latest database export failed.\n");
 }
 
 // ==== EXPORT BACKUP ====
 $backupFile = $backup_dir . '/backup.sql';
-logMessage("🟡 Creating backup: $backupFile", $log_file);
+echo "🟡 Creating backup: $backupFile\n";
 if (exportDatabase($db_host, $db_port, $db_user, $db_pass, $db_name, $backupFile)) {
-    logMessage("✅ Backup created successfully.", $log_file);
+    echo "✅ Backup created successfully.\n";
 } else {
-    logMessage("❌ Backup creation failed.", $log_file);
+    echo "❌ Backup creation failed.\n";
 }
 
 // ==== CLEANUP OLD BACKUPS ====
@@ -75,8 +66,8 @@ if (count($backupFolders) > $max_backups) {
     foreach ($oldFolders as $folder) {
         array_map('unlink', glob("$folder/*.*"));
         rmdir($folder);
-        logMessage("🗑️ Deleted old backup folder: $folder", $log_file);
+        echo "🗑️ Deleted old backup folder: $folder\n";
     }
 }
 
-logMessage("🎉 Backup process completed.", $log_file);
+echo "🎉 Backup process completed.\n";
