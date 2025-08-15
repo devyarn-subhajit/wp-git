@@ -108,3 +108,5 @@ function rrmdir($dir) {
     }
     rmdir($dir);
 }
+
+echo "new update";
