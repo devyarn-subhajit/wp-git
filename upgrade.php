@@ -9,7 +9,7 @@ $branch       = 'main';
 $skipList = [
     '.env',
     'db',
-    'upgrade.php'
+    'upgrade.php' // we will handle self-update separately
 ];
 
 echo "⬇ Downloading update from GitHub...\n";
@@ -52,14 +52,26 @@ if (!$extractedFolders || !isset($extractedFolders[0])) {
 }
 $rootExtractedFolder = $extractedFolders[0];
 
-// 1️⃣ COPY NEW FILES SAFELY
+// 1️⃣ COPY NEW FILES SAFELY (skip .env, db, upgrade.php)
 sync_directories($rootExtractedFolder, __DIR__, $skipList);
+
+// 2️⃣ HANDLE upgrade.php SELF-UPDATE
+$newUpgradePath = "$rootExtractedFolder/upgrade.php";
+if (file_exists($newUpgradePath)) {
+    copy($newUpgradePath, __DIR__ . '/upgrade.php.new');
+    echo "⚡ upgrade.php updated to temporary file. Replace after script finishes.\n";
+}
 
 // Cleanup
 rrmdir($tmpDir);
 unlink($tmpZip);
 
 echo "✅ Update complete!\n";
+
+if (file_exists(__DIR__ . '/upgrade.php.new')) {
+    rename(__DIR__ . '/upgrade.php.new', __DIR__ . '/upgrade.php');
+    echo "⚡ upgrade.php successfully replaced.\n";
+}
 
 // === FUNCTIONS ===
 
