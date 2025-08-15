@@ -12,9 +12,6 @@ $skipList = [
     'upgrade.php'
 ];
 
-// Optional: backup .env and db/latest.sql before upgrade
-backup_critical_files($skipList);
-
 echo "⬇ Downloading update from GitHub...\n";
 
 // TEMP PATHS
@@ -98,40 +95,4 @@ function rrmdir($dir) {
         is_dir($path) ? rrmdir($path) : @unlink($path);
     }
     rmdir($dir);
-}
-
-function backup_critical_files($skipList) {
-    echo "💾 Backing up critical files...\n";
-    $backupDir = __DIR__ . '/backup_' . date('Ymd_His');
-    @mkdir($backupDir, 0777, true);
-
-    foreach ($skipList as $item) {
-        $src = __DIR__ . '/' . $item;
-        $dst = $backupDir . '/' . $item;
-
-        if (is_dir($src)) {
-            copy_dir($src, $dst);
-        } elseif (file_exists($src)) {
-            copy($src, $dst);
-        }
-    }
-
-    echo "💾 Backup completed: $backupDir\n";
-}
-
-function copy_dir($src, $dst) {
-    if (!is_dir($src)) return;
-    @mkdir($dst, 0777, true);
-
-    $files = array_diff(scandir($src), ['.', '..']);
-    foreach ($files as $file) {
-        $srcPath = "$src/$file";
-        $dstPath = "$dst/$file";
-
-        if (is_dir($srcPath)) {
-            copy_dir($srcPath, $dstPath);
-        } else {
-            copy($srcPath, $dstPath);
-        }
-    }
 }
