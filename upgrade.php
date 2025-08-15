@@ -5,17 +5,20 @@ $repoName     = 'wp-git';
 $branch       = 'main';
 // $githubToken  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxx'; // For private repos
 
-// Files/folders to skip
+// Files/folders to skip (preserve these)
 $skipList = [
     '.env',
     'db',
 ];
 
-// === 0. Check version ===
-$localVersionFile = __DIR__ . '/version.txt';
-$localVersion = file_exists($localVersionFile) ? trim(file_get_contents($localVersionFile)) : '0.0.0';
+echo "⬇ Downloading update from GitHub...\n";
 
-$remoteVersionUrl = "https://raw.githubusercontent.com/$githubUser/$repoName/$branch/version.txt";
+// TEMP PATHS
+$tmpZip = __DIR__ . '/update.zip';
+$tmpDir = __DIR__ . '/tmp_update';
+
+// Download ZIP
+$zipUrl = "https://api.github.com/repos/$githubUser/$repoName/zipball/$branch";
 $opts = [
     "http" => [
         "header" => [
@@ -26,25 +29,6 @@ $opts = [
 ];
 $context = stream_context_create($opts);
 
-$remoteVersion = @file_get_contents($remoteVersionUrl, false, $context);
-if ($remoteVersion === false) exit("❌ Failed to fetch remote version.\n");
-
-$remoteVersion = trim($remoteVersion);
-if (!preg_match('/^\d+(\.\d+)*$/', $remoteVersion)) exit("❌ Invalid remote version format in version.txt\n");
-
-echo "📄 Local version: $localVersion\n";
-echo "📄 Remote version: $remoteVersion\n";
-
-if (version_compare($localVersion, $remoteVersion, '>=')) exit("✅ Already up to date.\n");
-
-echo "⬇ Downloading update...\n";
-
-// TEMP PATHS
-$tmpZip = __DIR__ . '/update.zip';
-$tmpDir = __DIR__ . '/tmp_update';
-
-// Download ZIP
-$zipUrl = "https://api.github.com/repos/$githubUser/$repoName/zipball/$branch";
 if (!file_put_contents($tmpZip, file_get_contents($zipUrl, false, $context))) {
     exit("❌ Failed to download update ZIP.\n");
 }
@@ -62,13 +46,6 @@ if ($zip->open($tmpZip) === TRUE) {
 // Find extracted root folder
 $rootExtractedFolder = glob($tmpDir . '/*', GLOB_ONLYDIR)[0];
 
-// Ensure version.txt exists
-if (!file_exists($rootExtractedFolder . '/version.txt')) {
-    rrmdir($tmpDir);
-    unlink($tmpZip);
-    exit("❌ Update aborted — version.txt missing from repository!\n");
-}
-
 // 1️⃣ DELETE ALL EXCEPT SKIP LIST
 clean_directory(__DIR__, $skipList);
 
@@ -79,7 +56,7 @@ sync_directories($rootExtractedFolder, __DIR__, $skipList);
 rrmdir($tmpDir);
 unlink($tmpZip);
 
-echo "✅ Update complete to version $remoteVersion!\n";
+echo "✅ Update complete!\n";
 
 // === FUNCTIONS ===
 
